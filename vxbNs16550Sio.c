@@ -11,6 +11,8 @@
 /*
 modification history
 --------------------
+2016/05/26  Jonah Liu		Add support for PR6120 board. 
+
 03a,13apr09,h_k  updated for kprintf() support in SMP. (CQ:158523)
 02z,10dec08,h_k  added more information in the API reference manual.
 02y,03sep08,jpb  Renamed VSB header file
@@ -356,6 +358,11 @@ LOCAL struct vxbPciID pciDevIDList[] =
 #define UART_DEVID_COMPUSA_SIO  0x9835
     { UART_DEVID_COMPUSA_SIO, UART_VENDOR_COMPUSA},
 
+#define UART_VENDOR_CASC706				0x10B5
+//#define UART_VENDOR_CASC706				0xaaaa
+#define UART_DEVID_CASC706_PR6120		0x9050
+    { UART_DEVID_CASC706_PR6120, UART_VENDOR_CASC706},
+
 
     /* add additional DevVend IDs here */
 };
@@ -693,6 +700,10 @@ INCLUDE_ISR_DEFER is not required to be added in config.h.
 INCLUDE FILES: ../h/sio/vxbNs16550Sio.h
 
 SEE ALSO: sioChanUtil and VxWorks Device Driver Developer's Guide.
+
+NOTE: (by Jonah)
+ Must set NUM_TTY to a value larger than maxium allowed serial ports,
+ or else ports will not show as "/tyCo/X"
 */
 
 /* local defines       */
@@ -1246,6 +1257,34 @@ LOCAL void ns16550vxbInstInit
 		fifoSize = 16;
 		}
 	    }
+		if (  pPciDevInfo->pciVendId == UART_VENDOR_CASC706) 
+		{
+			if ( pPciDevInfo->pciDevId == UART_DEVID_CASC706_PR6120)
+			{
+				
+				pDev->pRegBase[1] = (void *)((int)pDev->pRegBase[0] + 0x8);
+				pDev->regBaseFlags[1] = pDev->regBaseFlags[0];
+				pDev->pRegBase[2] = (void *)((int)pDev->pRegBase[1] + 0x8);
+				pDev->regBaseFlags[2] = pDev->regBaseFlags[0];
+				pDev->pRegBase[3] = (void *)((int)pDev->pRegBase[2] + 0x8);
+				pDev->regBaseFlags[3] = pDev->regBaseFlags[0];
+				
+				/*
+				pDev->pRegBase[1] = 0;
+				pDev->pRegBase[2] = 0;
+				pDev->pRegBase[3] = 0;
+				*/
+				pDev->pRegBase[4] = 0;
+				pDev->pRegBase[5] = 0;
+				pDev->pRegBase[6] = 0;
+				pDev->pRegBase[7] = 0;
+				pDev->pRegBase[8] = 0;
+				pDev->pRegBase[9] = 0;
+				
+				//regDelta = 1;
+				//fifoSize = 16;
+			}
+		}
 	}
 
     /* check each BAR for valid register set, and configure if appropriate */
@@ -1424,6 +1463,8 @@ LOCAL void ns16550vxbInstInit
 
                 if ( pPciDevInfo->pciVendId == UART_VENDOR_EASYSYNC )
                     pChan->xtal = PCI_CLK_FREQ * 8;
+                else if ( pPciDevInfo->pciVendId == UART_VENDOR_CASC706)
+                    pChan->xtal = PCI_CLK_FREQ * 4;
                 else
                     pChan->xtal = PCI_CLK_FREQ;
                 }
