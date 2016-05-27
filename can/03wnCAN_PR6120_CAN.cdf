@@ -49,5 +49,5 @@ Parameter PR6120_CAN_DEVIO_NAME
         NAME            PR6120 CAN Device I/O Board Name
         SYNOPSIS        Device I/O name, one for every board, no leading slash, separated by spaces
         TYPE            string
-        DEFAULT         "pr6120_can_0"
+        DEFAULT         "/can"
         }

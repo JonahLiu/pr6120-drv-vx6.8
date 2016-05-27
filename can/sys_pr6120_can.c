@@ -37,8 +37,8 @@ the PR6120 CAN card.
 #include "CAN/sja1000.h"
 #include "CAN/private/pr6120_can.h"
 
-#define DEVICE_ID_PR6120       0xC204L /* device ID */
-#define VENDOR_ID_PR6120       0x13FEL /* subsystem ID */
+#define DEVICE_ID_PR6120_CAN       0xC204L /* device ID */
+#define VENDOR_ID_PR6120_CAN       0x13FEL /* subsystem ID */
 
 
 #ifndef PCI_MSTR_MEMIO_BUS
@@ -268,7 +268,7 @@ STATUS sys_PR6120_CAN_Init
        pr6120_can_establishLinks()  */
     {
         UINT16 pciCmd  = PCI_CMD_IO_ENABLE |
-                         PCI_CMD_MEM_ENABLE | 
+                         PCI_CMD_MEM_ENABLE |
                          PCI_CMD_MASTER_ENABLE;
         UINT8  tmpByte = 0;
 
@@ -279,7 +279,7 @@ STATUS sys_PR6120_CAN_Init
             /* VM_STATE_MASK_VALID | VM_STATE_MASK_WRITABLE | 
                VM_STATE_MASK_CACHEABLE; */
             UINT  mask = VM_STATE_MASK_FOR_ALL;
-
+            
             /* VM_STATE_VALID | VM_STATE_WRITABLE | VM_STATE_CACHEABLE_NOT; */
             UINT  state = VM_STATE_FOR_PCI;
         #endif
@@ -296,7 +296,7 @@ STATUS sys_PR6120_CAN_Init
         pciConfigInByte (bus, dev, func,
                      PCI_CFG_DEV_INT_LINE, &tmpByte);
 
-	pBrd->irq = (UINT)tmpByte;
+				pBrd->irq = (UINT)tmpByte;
         pBrd->bar0 &= PCI_MEMBASE_MASK;
         /*
         pBrd->bar1 &= PCI_MEMBASE_MASK;
@@ -322,12 +322,13 @@ STATUS sys_PR6120_CAN_Init
         #if (CPU_FAMILY == I80X86)
             /* can only add page aligned memory addresses; 
             otherwise, system hangs */
+            /* FIXME: This fails for unknown reason
             if (sysMmuMapAdd((void *)(pBrd->bar0 & pciMask), 
                 (UINT)pciSize, mask, state) == ERROR)
             {
                 logMsg("sysMmuMapAdd failed bar0.\n",0,0,0,0,0,0);
                 return ERROR;
-            }
+            }*/
 						/*
             if (sysMmuMapAdd((void *)(pBrd->bar2 & pciMask), 
                 (UINT)pciSize, mask, state) == ERROR)
@@ -473,7 +474,7 @@ UCHAR sys_PR6120_CAN_canInByte
 )
 {
     UCHAR    net     = pDev->pCtrl->ctrlID;
-    UINT32   offset  = pDev->pBrd->bar2;
+    UINT32   offset  = pDev->pBrd->bar0;
     ULONG    memBase = pDev->pBrd->ioAddress;
     UCHAR    data;
     UCHAR*   addr;
