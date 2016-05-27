@@ -1,22 +1,15 @@
-/* esd_can_pci_200_cfg.c - configlette for ESD CAN PCI/200 boards */
-
-/* Copyright 2001-2003 Wind River Systems, Inc. */
+/* pr6120_can_cfg.c - configlette for PR6120 CAN boards */
 
 /* 
 modification history 
 --------------------
-01f,05oct05,lsg  fix warning
-01e,09dec04,lsg  fixed problem with writing to a const string with strtok_r.
-08jan03,emcw  Added DevIO interface support
-23nov02,rp    version 1.3; support for shtahoeamanda (HCAN2)
-27nov01,dnb   written
-
+2016/05/27 Jonah Liu Created on base of pr6120_can_cfg.c
 */
 
 /* 
 
  DESCRIPTION
- This file contains the initialization functions for the  ESD CAN PCI/200 card.
+ This file contains the initialization functions for the  PR6120 CAN card.
  
 */
 
@@ -29,7 +22,7 @@ modification history
 #include "CAN/canFixedLL.h"
 #include "CAN/i82527.h"
 #include "CAN/sja1000.h"
-#include "CAN/private/esd_pci_200.h"
+#include "CAN/private/pr6120_can.h"
 
 #ifdef INCLUDE_WNCAN_DEVIO
 #include "CAN/wncanDevIO.h"
@@ -37,77 +30,77 @@ modification history
 
 
 /* extern references */
-extern STATUS esd_can_pci_200_establishLinks(struct WNCAN_Device *pDev);
-extern STATUS esd_can_pci_200_close(struct WNCAN_Device *pDev);
-extern struct WNCAN_Device *esd_can_pci_200_open(UINT brdNdx, UINT ctrlNdx);
-extern void ESD_PCI_200_InitAll();
-extern void ESD_PCI_200_IntConnectAll();
+extern STATUS pr6120_can_establishLinks(struct WNCAN_Device *pDev);
+extern STATUS pr6120_can_close(struct WNCAN_Device *pDev);
+extern struct WNCAN_Device *pr6120_can_open(UINT brdNdx, UINT ctrlNdx);
+extern void PR6120_CAN_InitAll();
+extern void PR6120_CAN_IntConnectAll();
 
 /* forward references */
 #ifdef INCLUDE_WNCAN_SHOW
-LOCAL void   esd_can_pci_200_show(void);
+LOCAL void   pr6120_can_show(void);
 #endif
 
 #ifdef INCLUDE_WNCAN_DEVIO
-LOCAL void   esd_can_pci_200_devio_init(void);
+LOCAL void   pr6120_can_devio_init(void);
 #endif
 
 /* reserve memory for the requisite data structures */
-LOCAL struct ESD_PCI_200_DeviceEntry
-	esd_pci_200_cfg_deviceArray[MAX_ESD_CAN_PCI_200_BOARDS];
+LOCAL struct PR6120_CAN_DeviceEntry
+	pr6120_can_cfg_deviceArray[MAX_PR6120_CAN_BOARDS];
 
-LOCAL BoardLLNode ESD_PCI_200_LLNode;
+LOCAL BoardLLNode PR6120_CAN_LLNode;
 
 
 /************************************************************************
 *
-* wncan_esd_pci_200_init - 
+* wncan_pr6120_can_init - 
 *
 * RETURNS: N/A
 *   
 * ERRNO: N/A
 *
 */ 
-void wncan_esd_pci_200_init(void)
+void wncan_pr6120_can_init(void)
 {
     /* Add this board into linked list of boards */
-    ESD_PCI_200_LLNode.key = WNCAN_ESD_PCI_200;
-    ESD_PCI_200_LLNode.nodedata.boarddata.establinks_fn = esd_can_pci_200_establishLinks;
-    ESD_PCI_200_LLNode.nodedata.boarddata.close_fn      = esd_can_pci_200_close;
-    ESD_PCI_200_LLNode.nodedata.boarddata.open_fn       = esd_can_pci_200_open;
+    PR6120_CAN_LLNode.key = WNCAN_PR6120_CAN;
+    PR6120_CAN_LLNode.nodedata.boarddata.establinks_fn = pr6120_can_establishLinks;
+    PR6120_CAN_LLNode.nodedata.boarddata.close_fn      = pr6120_can_close;
+    PR6120_CAN_LLNode.nodedata.boarddata.open_fn       = pr6120_can_open;
 #ifdef INCLUDE_WNCAN_SHOW
-    ESD_PCI_200_LLNode.nodedata.boarddata.show_fn       = esd_can_pci_200_show;
+    PR6120_CAN_LLNode.nodedata.boarddata.show_fn       = pr6120_can_show;
 #else
-    ESD_PCI_200_LLNode.nodedata.boarddata.show_fn       = NULL;
+    PR6120_CAN_LLNode.nodedata.boarddata.show_fn       = NULL;
 #endif
     
-    BOARDLL_ADD( &ESD_PCI_200_LLNode );
+    BOARDLL_ADD( &PR6120_CAN_LLNode );
     
     /* register the possible controllers for this board */
     sja1000_registration();
     
     /* init the board */
-    ESD_PCI_200_InitAll();
+    PR6120_CAN_InitAll();
 }
 
 
 /************************************************************************
 *
-* wncan_esd_pci_200_init2 - 
+* wncan_pr6120_can_init2 - 
 *
 * RETURNS: N/A
 *   
 * ERRNO: N/A
 *
 */ 
-void wncan_esd_pci_200_init2(void)
+void wncan_pr6120_can_init2(void)
 {
-    /* ESD PCI/200 board including two sja1000 controllers (2) */
-    ESD_PCI_200_IntConnectAll();
+    /* PR6120 CAN board including two sja1000 controllers (2) */
+    PR6120_CAN_IntConnectAll();
     
 #ifdef INCLUDE_WNCAN_DEVIO
     /* Initialize the DevIO interface */
-    esd_can_pci_200_devio_init();
+    pr6120_can_devio_init();
 #endif
 }
 
@@ -116,37 +109,37 @@ void wncan_esd_pci_200_init2(void)
 
 /************************************************************************
 *
-* esd_pci_200_MaxBrdNumGet -  get the number of ESD PCI/200 boards
+* pr6120_can_MaxBrdNumGet -  get the number of PR6120 CAN boards
 *
-* RETURNS: the number of ESD PCI/200 boards.
+* RETURNS: the number of PR6120 CAN boards.
 *   
 * ERRNO: N/A
 *
 */ 
-UINT ESD_PCI_200_MaxBrdNumGet(void)
+UINT PR6120_CAN_MaxBrdNumGet(void)
 {
-    return(MAX_ESD_CAN_PCI_200_BOARDS);
+    return(MAX_PR6120_CAN_BOARDS);
 }
 
 
 /************************************************************************
 *
-* esd_pci_200_DevEntryGet -  get the specified ESD PCI/200 device entry.
+* pr6120_can_DevEntryGet -  get the specified PR6120 CAN device entry.
 *
 * This function returns a pointer to the device entry structure of the
-* specified ESD PCI/200 device. The board number argument is zero based;
+* specified PR6120 CAN device. The board number argument is zero based;
 * therefore, the first board has number zero.
 * 
-* RETURNS: the ESD PCI/200 device entry structure.
+* RETURNS: the PR6120 CAN device entry structure.
 *   
 * ERRNO: N/A
 *
 */ 
-struct ESD_PCI_200_DeviceEntry* ESD_PCI_200_DeviceEntryGet(UINT brdNum)
+struct PR6120_CAN_DeviceEntry* PR6120_CAN_DeviceEntryGet(UINT brdNum)
 {
-    if (MAX_ESD_CAN_PCI_200_BOARDS > 0 && 
-        brdNum < MAX_ESD_CAN_PCI_200_BOARDS)
-        return(&esd_pci_200_cfg_deviceArray[brdNum]);
+    if (MAX_PR6120_CAN_BOARDS > 0 && 
+        brdNum < MAX_PR6120_CAN_BOARDS)
+        return(&pr6120_can_cfg_deviceArray[brdNum]);
     else
         return(NULL);
 }
@@ -154,7 +147,7 @@ struct ESD_PCI_200_DeviceEntry* ESD_PCI_200_DeviceEntryGet(UINT brdNum)
 
 /************************************************************************
 *
-* esd_pci_200_link - links API definitions in wncan_api.c
+* pr6120_can_link - links API definitions in wncan_api.c
 *
 * RETURNS: N/A
 *   
@@ -162,13 +155,13 @@ struct ESD_PCI_200_DeviceEntry* ESD_PCI_200_DeviceEntryGet(UINT brdNum)
 *
 */ 
 #ifdef USE_CAN_FUNCTION_DEFS
-void esd_pci_200_link(void)
+void pr6120_can_link(void)
 {
     BOOL flag = FALSE;
     struct WNCAN_Device *pDev;
     if (flag == TRUE)
     {
-        pDev = CAN_Open(WNCAN_ESD_PCI_200,0,0);
+        pDev = CAN_Open(WNCAN_PR6120_CAN,0,0);
         CAN_Close(pDev);
     }
     return;
@@ -179,32 +172,32 @@ void esd_pci_200_link(void)
 #ifdef INCLUDE_WNCAN_SHOW
 /************************************************************************
 *
-* esd_can_pci_200_show - display board to stdout
+* pr6120_can_show - display board to stdout
 *
 * RETURNS: N/A
 *   
 * ERRNO: N/A
 *
 */
-LOCAL void esd_can_pci_200_show(void)
+LOCAL void pr6120_can_show(void)
 {
     UINT i;
-    struct ESD_PCI_200_DeviceEntry *pDE;
+    struct PR6120_CAN_DeviceEntry *pDE;
     UINT maxBrdNum;
     
-    maxBrdNum = ESD_PCI_200_MaxBrdNumGet();
+    maxBrdNum = PR6120_CAN_MaxBrdNumGet();
     
     if (maxBrdNum == 0)
         return;
     
-    pDE = ESD_PCI_200_DeviceEntryGet(0);
+    pDE = PR6120_CAN_DeviceEntryGet(0);
     
     printf("\n\tBoard Name: %s\n",
         pDE->canDevice[0].deviceName);
     
     for(i = 0 ; i < maxBrdNum; i++)
     {
-        pDE = ESD_PCI_200_DeviceEntryGet(i);
+        pDE = PR6120_CAN_DeviceEntryGet(i);
         if(pDE->inUse == TRUE)
         {
             printf("\t\tBoard Index: %d\n", i);
@@ -213,13 +206,13 @@ LOCAL void esd_can_pci_200_show(void)
             
             printf("\t\tBase Address 0: 0x%0x\n", 
                 pDE->canBoard.bar0);
-            
+            /*
             printf("\t\tBase Address 1: 0x%0x\n", 
                 pDE->canBoard.bar1);
             
             printf("\t\tBase Address 2: 0x%0x\n", 
                 pDE->canBoard.bar2);
-            
+            */
             printf("\t\tInterrupt Number: 0x%0x\n",
                 pDE->canBoard.irq);
         }
@@ -232,14 +225,14 @@ LOCAL void esd_can_pci_200_show(void)
 #ifdef INCLUDE_WNCAN_DEVIO
 /************************************************************************
 *
-* esd_can_pci_200_devio_init - initialize the DevIO interface 
+* pr6120_can_devio_init - initialize the DevIO interface 
 *
 * RETURNS: N/A
 *   
 * ERRNO: N/A
 *
 */
-LOCAL void esd_can_pci_200_devio_init(void)
+LOCAL void pr6120_can_devio_init(void)
 {
     char*                  pCurBrdName = NULL;
     char*                  pLastBrdName = NULL;
@@ -255,21 +248,21 @@ LOCAL void esd_can_pci_200_devio_init(void)
     Make a copy of the devio name parameter before operating on it.
     */
     
-    copyConstString = (char *) malloc(strlen(ESD_CAN_PCI_200_DEVIO_NAME) + 1);
+    copyConstString = (char *) malloc(strlen(PR6120_CAN_DEVIO_NAME) + 1);
     
-    memcpy(copyConstString, ESD_CAN_PCI_200_DEVIO_NAME, (strlen(ESD_CAN_PCI_200_DEVIO_NAME) + 1));
+    memcpy(copyConstString, PR6120_CAN_DEVIO_NAME, (strlen(PR6120_CAN_DEVIO_NAME) + 1));
     
     pCurBrdName = strtok_r(copyConstString, sep, &pLastBrdName);
     
     /* Parse name list and initialize each controller */
     
-    for(boardidx=0; (pCurBrdName && (boardidx < MAX_ESD_CAN_PCI_200_BOARDS)); boardidx++)
+    for(boardidx=0; (pCurBrdName && (boardidx < MAX_PR6120_CAN_BOARDS)); boardidx++)
     {
-        for(ctrlidx=0; ctrlidx < ESD_PCI_200_MAX_CONTROLLERS; ctrlidx++)
+        for(ctrlidx=0; ctrlidx < PR6120_CAN_MAX_CONTROLLERS; ctrlidx++)
         {
             /* Construct DevIO name for each controller, /boardName/ctlrNum */
             status = wncDevIODevCreate(pCurBrdName, 
-                WNCAN_ESD_PCI_200,
+                WNCAN_PR6120_CAN,
                 boardidx, ctrlidx, &wncDrv);
             
             if( status == ERROR )

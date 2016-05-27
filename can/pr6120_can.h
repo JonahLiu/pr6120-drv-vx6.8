@@ -1,49 +1,47 @@
-/* esd_pci_200.h - definitions for ESD PCI/200 board */
-
-/* Copyright 2001 Wind River Systems, Inc. */
+/* pr6120_can.h - definitions for PR6120 CAN board */
 
 /* 
 modification history 
 --------------------
-20dec01, dnb written
+2016/05/27 Jonah Liu Created on base of PR6120_CAN.c
 
 */
 
 /* 
 
 DESCRIPTION
-This file contains definitions used only in esd_pci_200.
-and esd_pci_200_cfg.c 
+This file contains definitions used only in pr6120_can.
+and pr6120_can_cfg.c 
 
 */
-#ifndef ESD_PCI_200_H
-#define ESD_PCI_200_H
+#ifndef PR6120_CAN_H
+#define PR6120_CAN_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-#define ESD_PCI_200_MAX_CONTROLLERS (2)
+#define PR6120_CAN_MAX_CONTROLLERS (2)
 
 
-struct ESD_PCI_200_ChannelData
+struct PR6120_CAN_ChannelData
 {
    WNCAN_ChannelMode sja1000chnMode[SJA1000_MAX_MSG_OBJ];
 };
 
 
-struct ESD_PCI_200_DeviceEntry
+struct PR6120_CAN_DeviceEntry
 {
-    struct WNCAN_Device             canDevice[ESD_PCI_200_MAX_CONTROLLERS];
-    struct ESD_PCI_200_ChannelData  chData[ESD_PCI_200_MAX_CONTROLLERS];
-    struct WNCAN_Controller         canControllerArray[ESD_PCI_200_MAX_CONTROLLERS];
+    struct WNCAN_Device             canDevice[PR6120_CAN_MAX_CONTROLLERS];
+    struct PR6120_CAN_ChannelData  chData[PR6120_CAN_MAX_CONTROLLERS];
+    struct WNCAN_Controller         canControllerArray[PR6120_CAN_MAX_CONTROLLERS];
     struct WNCAN_Board              canBoard;
-    struct TxMsg                    txMsg[ESD_PCI_200_MAX_CONTROLLERS];
+    struct TxMsg                    txMsg[PR6120_CAN_MAX_CONTROLLERS];
     int                             bus;
     int                             dev;
     int                             func;
     BOOL                            inUse;
-    BOOL                            allocated[ESD_PCI_200_MAX_CONTROLLERS];
+    BOOL                            allocated[PR6120_CAN_MAX_CONTROLLERS];
     BOOL                            intConnect;
 };
 
@@ -51,4 +49,4 @@ struct ESD_PCI_200_DeviceEntry
 }
 #endif /* __cplusplus */
 
-#endif /* ESD_PCI_200_H */
+#endif /* PR6120_CAN_H */

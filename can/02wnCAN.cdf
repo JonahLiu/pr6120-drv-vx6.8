@@ -11,6 +11,7 @@
 /*
 modification history
 --------------------
+2016/05/27  Jonah Liu   Add support for PR6120 CAN
 01a,04Dec07,d_z  add support for tolapai CAN
 12may05,lsg	 Replace C++ style comments with C style. Former caused error on 		 Linux.
 26feb04,bjn      Added mpc5200 support.
@@ -113,7 +114,8 @@ InitGroup usrWindNetCAN_Group1
         INIT_RTN        usrWindNetCAN_G1 ();
         _INIT_ORDER     usrRoot
         INIT_ORDER      INCLUDE_ESD_CAN_PCI_200 \
-                        INCLUDE_ADLINK_7841
+                        INCLUDE_ADLINK_7841 \
+                        INCLUDE_PR6120_CAN
 
         /* force an initialization very early within usrroot */
         INIT_BEFORE     INCLUDE_MMU_BASIC
@@ -138,7 +140,8 @@ InitGroup usrWindNetCAN_Group2
                         INCLUDE_MSMCAN_PC104        \
                         INCLUDE_MPC5200_WNCAN       \
                         INCLUDE_MCF5485WNCAN       \
-                        INCLUDE_TOLAPAI_CAN
+                        INCLUDE_TOLAPAI_CAN        \
+                        INCLUDE_PR6120_CAN_2
 
         INIT_BEFORE     INCLUDE_USER_APPL
 }

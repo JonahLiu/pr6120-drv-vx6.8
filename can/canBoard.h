@@ -11,6 +11,7 @@
 /* 
 modification history 
 --------------------
+2016/05/27  Jonah Liu  Add PR6120 board CAN port support
 01c,30dec08,x_f  Added fsl_ads5121e CAN support
 01b,04dec07,d_z  Added tolapai can support
 01a,28dec05,jb3  Add WNCAN_MCF5485 for spring release
@@ -75,6 +76,7 @@ typedef void   (*pfn_Board_Show_Type)(void);
 #define WNCAN_MCF5485           11
 #define WNCAN_BRD_TOLAPAI       12
 #define WNCAN_MPC5121E          13
+#define WNCAN_PR6120_CAN        14
 
 struct WNCAN_Board
 {

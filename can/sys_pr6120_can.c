@@ -1,12 +1,9 @@
-/* sys_esd_pci_200.c - bsp dependent init routine for ESD CAN PCI/200 */
-
-/* Copyright 2001 Wind River Systems, Inc. */
+/* sys_pr6120_can.c - bsp dependent init routine for PR6120 CAN */
 
 /* 
 modification history 
 --------------------
-01b,03sep04,lsg make default bit timing 125 Kbps
-01a,21jan02,jac written
+2016/05/27 Jonah Liu Created on base of sys_pr6120_can.c
 
 */
 
@@ -14,7 +11,7 @@ modification history
 
 DESCRIPTION
 This file contains the BSP dependent initialization function of
-the ESD CAN PCI/200 card.
+the PR6120 CAN card.
 
 */
 
@@ -38,14 +35,10 @@ the ESD CAN PCI/200 card.
 #include "CAN/canBoard.h"
 #include "CAN/i82527.h"
 #include "CAN/sja1000.h"
-#include "CAN/private/esd_pci_200.h"
+#include "CAN/private/pr6120_can.h"
 
-#define DEVICE_ID_PLX_9050     0x9050L /* device ID */
-#define VENDOR_ID_ESD          0x12FEL /* subsystem ID */
-#define VENDOR_ID_PLX          0x10B5L /* vendor ID */
-#define DEVICE_ID_D32PCI       0x0003L
-#define DEVICE_ID_PCI200       0x0004L /* subvendor ID */
-
+#define DEVICE_ID_PR6120       0xC204L /* device ID */
+#define VENDOR_ID_PR6120       0x13FEL /* subsystem ID */
 
 
 #ifndef PCI_MSTR_MEMIO_BUS
@@ -68,7 +61,7 @@ the ESD CAN PCI/200 card.
 IMPORT STATUS sysMmuMapAdd (void* address, UINT len, UINT initialStateMask, UINT initialState);
 #endif
 
-static const char ESD_PCI_200_deviceName[] ="ESD CAN PCI/200";
+static const char PR6120_CAN_deviceName[] ="PR6120 CAN";
 
 /* external reference */
 #ifdef TARGET_BIGSUR7751
@@ -81,15 +74,15 @@ static const char ESD_PCI_200_deviceName[] ="ESD CAN PCI/200";
     extern STATUS sysPicIntEnable(int intNum);
 #endif
 
-extern UINT ESD_PCI_200_MaxBrdNumGet(void);
-extern struct ESD_PCI_200_DeviceEntry* ESD_PCI_200_DeviceEntryGet(UINT brdNum);
-extern void ESD_PCI_200_EnableIRQ(struct WNCAN_Device *pDev);
-extern void ESD_PCI_200_DisableIRQ(struct WNCAN_Device *pDev);
+extern UINT PR6120_CAN_MaxBrdNumGet(void);
+extern struct PR6120_CAN_DeviceEntry* PR6120_CAN_DeviceEntryGet(UINT brdNum);
+extern void PR6120_CAN_EnableIRQ(struct WNCAN_Device *pDev);
+extern void PR6120_CAN_DisableIRQ(struct WNCAN_Device *pDev);
 extern STATUS CAN_DEVICE_establishLinks(WNCAN_DEVICE *pDev, WNCAN_BoardType brdType, WNCAN_ControllerType ctrlType);
 
 /************************************************************************
 *
-* esd_PCI200_ISR - board-level isr for ESD PCI 200 CAN board
+* PR6120_CAN_ISR - board-level isr for PR6120 CAN board
 *
 *
 * RETURNS: N/A
@@ -97,19 +90,19 @@ extern STATUS CAN_DEVICE_establishLinks(WNCAN_DEVICE *pDev, WNCAN_BoardType brdT
 * ERRNO: N/A
 *
 */    
-static void ESD_PCI_200_ISR
+static void PR6120_CAN_ISR
 (
     ULONG param
 )
 {
-    struct ESD_PCI_200_DeviceEntry *pDE = 
-        (struct ESD_PCI_200_DeviceEntry *)param;
+    struct PR6120_CAN_DeviceEntry *pDE = 
+        (struct PR6120_CAN_DeviceEntry *)param;
     UINT i;
 
     /* disable the interrupt. */
-    ESD_PCI_200_DisableIRQ(&pDE->canDevice[0]);
+    PR6120_CAN_DisableIRQ(&pDE->canDevice[0]);
 
-    for (i = 0; i < ESD_PCI_200_MAX_CONTROLLERS; i++)
+    for (i = 0; i < PR6120_CAN_MAX_CONTROLLERS; i++)
     {
         if(pDE->allocated[i])
         {
@@ -117,23 +110,23 @@ static void ESD_PCI_200_ISR
         }
     }
     /* Enable the interrupt. */
-    ESD_PCI_200_EnableIRQ(&pDE->canDevice[0]);
+    PR6120_CAN_EnableIRQ(&pDE->canDevice[0]);
 }
 
 
 /************************************************************************
 *
-* sys_ESD_PCI_200_IntConnect - connect board-level interrupts
+* sys_PR6120_CAN_IntConnect - connect board-level interrupts
 *
 * This routine connects and enables the board level interrupt of the 
-* ESD PCI/200 CAN card.
+* PR6120 CAN CAN card.
 *
 * RETURNS: N/A
 *   
 * ERRNO: N/A
 *
 */    
-void sys_ESD_PCI_200_IntConnect
+void sys_PR6120_CAN_IntConnect
 (
     UINT brdNum
 )
@@ -142,10 +135,10 @@ void sys_ESD_PCI_200_IntConnect
     VOIDFUNCPTR*                    irqVec        = 0;
     struct WNCAN_Board              *pBrd         = 0;
     struct WNCAN_Device             *pDev         = 0;
-    struct ESD_PCI_200_DeviceEntry  *pDeviceEntry = 0;
+    struct PR6120_CAN_DeviceEntry  *pDeviceEntry = 0;
 
     /* Get the device entry */
-    pDeviceEntry = ESD_PCI_200_DeviceEntryGet(brdNum);
+    pDeviceEntry = PR6120_CAN_DeviceEntryGet(brdNum);
 
     if (pDeviceEntry == NULL)
         return;
@@ -186,10 +179,10 @@ void sys_ESD_PCI_200_IntConnect
     #endif
 
     /* connect the interrupt handler */
-    pciIntConnect(irqVec,ESD_PCI_200_ISR,(ULONG)pDeviceEntry);
+    pciIntConnect(irqVec,PR6120_CAN_ISR,(ULONG)pDeviceEntry);
 
     /* enable PCI board level interrupts */
-    ESD_PCI_200_EnableIRQ(pDev);
+    PR6120_CAN_EnableIRQ(pDev);
 
     /* enable CPU level interrupts */
     #if (CPU_FAMILY == I80X86)
@@ -221,14 +214,14 @@ void sys_ESD_PCI_200_IntConnect
 
 /************************************************************************
 *
-* sys_ESD_PCI_200_Init - init the specified ESD PCI/200 board
+* sys_PR6120_CAN_Init - init the specified PR6120 CAN board
 *
 * RETURNS: OK or ERROR
 *   
 * ERRNO: N/A
 *
 */
-STATUS sys_ESD_PCI_200_Init
+STATUS sys_PR6120_CAN_Init
 (
     UINT brdNum
 )
@@ -239,23 +232,23 @@ STATUS sys_ESD_PCI_200_Init
     UINT          ctrlNum;
     STATUS        retCode;
     
-    struct ESD_PCI_200_DeviceEntry  *pDeviceEntry = 0;
+    struct PR6120_CAN_DeviceEntry  *pDeviceEntry = 0;
     struct WNCAN_Device             *pDev[2]      = {0,0};
     struct WNCAN_Board              *pBrd         = 0;
 
     retCode = ERROR;      /* pessimistic */
 
     /* check that the board number is within range */
-    if (brdNum >= ESD_PCI_200_MaxBrdNumGet())
+    if (brdNum >= PR6120_CAN_MaxBrdNumGet())
         goto exit;
 
     /* check if the board is actually installed */
-    if (pciFindDevice(VENDOR_ID_PLX, DEVICE_ID_PLX_9050, brdNum, &bus, 
+    if (pciFindDevice(VENDOR_ID_PR6120_CAN, DEVICE_ID_PR6120_CAN, brdNum, &bus, 
         &dev, &func) == ERROR)
         goto exit;
 
     /* Get the device entry */
-    pDeviceEntry = ESD_PCI_200_DeviceEntryGet(brdNum);
+    pDeviceEntry = PR6120_CAN_DeviceEntryGet(brdNum);
 
     if (pDeviceEntry == NULL)
         goto exit;
@@ -272,7 +265,7 @@ STATUS sys_ESD_PCI_200_Init
     pBrd = &pDeviceEntry->canBoard;
 
     /* Initialize the board data structure: Note, brdType is set inside
-       esd_can_pci_200_establishLinks()  */
+       pr6120_can_establishLinks()  */
     {
         UINT16 pciCmd  = PCI_CMD_IO_ENABLE |
                          PCI_CMD_MEM_ENABLE | 
@@ -293,29 +286,35 @@ STATUS sys_ESD_PCI_200_Init
 
         pciConfigInLong (bus, dev, func,
                      PCI_CFG_BASE_ADDRESS_0, &(pBrd->bar0));
-
+        /*             
         pciConfigInLong (bus, dev, func,
                      PCI_CFG_BASE_ADDRESS_1, &(pBrd->bar1));
 
         pciConfigInLong (bus, dev, func,
                      PCI_CFG_BASE_ADDRESS_2, &(pBrd->bar2));
-
+        */
         pciConfigInByte (bus, dev, func,
                      PCI_CFG_DEV_INT_LINE, &tmpByte);
 
 	pBrd->irq = (UINT)tmpByte;
         pBrd->bar0 &= PCI_MEMBASE_MASK;
-        pBrd->bar1 &= PCI_IOBASE_MASK;
-        pBrd->bar2 &= PCI_MEMBASE_MASK;
+        /*
+        pBrd->bar1 &= PCI_MEMBASE_MASK;
+        pBrd->bar2 &= PCI_IOBASE_MASK;
+        */
 
 #if ((CPU==MIPS64) ||  (CPU==MIPS32))
         pBrd->bar0 |= K1BASE;
+        /*
         pBrd->bar1 |= K1BASE;
         pBrd->bar2 |= K1BASE;
+        */
 #else
         pBrd->bar0 -= PCI_MSTR_MEMIO_BUS;
+        /*
         pBrd->bar1 -= PCI_MSTR_MEMIO_BUS;
         pBrd->bar2 -= PCI_MSTR_MEMIO_BUS;
+        */
 #endif
 
         pciConfigOutWord (bus, dev, func, PCI_CFG_COMMAND, pciCmd);
@@ -329,13 +328,14 @@ STATUS sys_ESD_PCI_200_Init
                 logMsg("sysMmuMapAdd failed bar0.\n",0,0,0,0,0,0);
                 return ERROR;
             }
-
+						/*
             if (sysMmuMapAdd((void *)(pBrd->bar2 & pciMask), 
                 (UINT)pciSize, mask, state) == ERROR)
             {
                 logMsg("sysMmuMapAdd failed for bar2.\n",0,0,0,0,0,0);
                 return ERROR;
             }
+            */
             pBrd->ioAddress = 0;
         #endif
 
@@ -345,7 +345,7 @@ STATUS sys_ESD_PCI_200_Init
     }
 
     /* Initialize each controller contained in the board */
-    for (ctrlNum = 0; ctrlNum < ESD_PCI_200_MAX_CONTROLLERS; ctrlNum++)
+    for (ctrlNum = 0; ctrlNum < PR6120_CAN_MAX_CONTROLLERS; ctrlNum++)
     {
         pDev[ctrlNum] = &(pDeviceEntry->canDevice[ctrlNum]);
 
@@ -357,7 +357,7 @@ STATUS sys_ESD_PCI_200_Init
         pDev[ctrlNum]->pBrd = pBrd;
 
         /* Initialize the controller data structure: Note, ctrlType is set 
-           inside esd_can_pci_200_establishLinks() */
+           inside pr6120_can_establishLinks() */
         pDev[ctrlNum]->pCtrl->ctrlID     = (UCHAR)ctrlNum;
         pDev[ctrlNum]->pCtrl->pDev       = pDev[ctrlNum];
         pDev[ctrlNum]->pCtrl->chnType    = g_sja1000chnType;
@@ -377,8 +377,8 @@ STATUS sys_ESD_PCI_200_Init
         pDev[ctrlNum]->pCtrl->samples = 0;
 
 
-        /* This will call esd_can_pci_200_establishLinks() */
-        if(CAN_DEVICE_establishLinks(pDev[ctrlNum], WNCAN_ESD_PCI_200, 
+        /* This will call pr6120_can_establishLinks() */
+        if(CAN_DEVICE_establishLinks(pDev[ctrlNum], WNCAN_PR6120_CAN, 
             WNCAN_SJA1000) == ERROR)
         {
             pDev[ctrlNum] = 0;
@@ -386,7 +386,7 @@ STATUS sys_ESD_PCI_200_Init
         }
 
         /* Assign the device name and Id */
-        pDev[ctrlNum]->deviceName = ESD_PCI_200_deviceName;
+        pDev[ctrlNum]->deviceName = PR6120_CAN_deviceName;
         pDev[ctrlNum]->deviceId = (brdNum<<8) | ctrlNum;
     }
 
@@ -405,14 +405,14 @@ exit:
 
 
 /*******************************************************************
- *  sys_ESD_PCI_200_canOutByte - The ESD specific function for CAN 
+ *  sys_PR6120_CAN_canOutByte - The ESD specific function for CAN 
  * writes on the PCI/200 board.
  *
  * RETURNS: NONE
  *
  * ERRNO: N/A
  */
-void sys_ESD_PCI_200_canOutByte
+void sys_PR6120_CAN_canOutByte
 (
     struct WNCAN_Device *pDev,
     unsigned int reg,
@@ -420,7 +420,7 @@ void sys_ESD_PCI_200_canOutByte
 )
 {
     UCHAR    net     = pDev->pCtrl->ctrlID;
-    UINT32   offset  = pDev->pBrd->bar2;
+    UINT32   offset  = pDev->pBrd->bar0;
     ULONG    memBase = pDev->pBrd->ioAddress;
 
     UCHAR*   addr;
@@ -434,11 +434,13 @@ void sys_ESD_PCI_200_canOutByte
       /* The SJA1000 registers are numbered as follows because of big to 
          little endian byte swapping on the CPCI bus:
          3 2 1 0    7 6 5 4    11 10 9 8    15 14 13 12 ... 31 30 29 28 */
+      /*
       reg = (reg/4 + 1)*4 - 1 - (reg%4);
+      */
     #endif
     #endif
 
-    addr = (UCHAR*)(memBase) + (offset + reg + net*0x100);
+    addr = (UCHAR*)(memBase) + (offset + reg*4 + net*0x100);
 
     #ifdef DEBUG
     /* Read the data first */
@@ -457,14 +459,14 @@ void sys_ESD_PCI_200_canOutByte
 }
 
 /*******************************************************************
- *  sys_ESD_PCI_200_canInByte - The ESD specific function for CAN 
+ *  sys_PR6120_CAN_canInByte - The ESD specific function for CAN 
  * reads on the PCI/200 board.
  *
  * RETURNS: UCHAR - The register contents
  *
  * ERRNO: N/A
  */
-UCHAR sys_ESD_PCI_200_canInByte
+UCHAR sys_PR6120_CAN_canInByte
 (
     struct WNCAN_Device *pDev,
     unsigned int reg
@@ -481,11 +483,13 @@ UCHAR sys_ESD_PCI_200_canInByte
     /* The SJA1000 registers are numbered as follows because of big to 
     little endian byte swapping on the CPCI bus:
     3 2 1 0    7 6 5 4    11 10 9 8    15 14 13 12 ... 31 30 29 28 */
+    /*
     reg = (reg/4 + 1)*4 - 1 - (reg%4);
+    */
     #endif
     #endif
     
-    addr = (UCHAR*)(memBase) + (offset + reg + net*0x100);
+    addr = (UCHAR*)(memBase) + (offset + reg*4 + net*0x100);
     data = *(addr);
     
     return(data);
