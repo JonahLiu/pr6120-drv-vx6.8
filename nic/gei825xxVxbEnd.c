@@ -186,6 +186,9 @@ SEE ALSO: vxBus, ifLib, endLib, netBufLib, miiBus
 \tb "Intel(r) 82580 Quad/Dual Gigabit Ethernet LAN Controller Datasheet http://download.intel.com/design/network/datashts/321027.pdf"
 \tb "Intel(r) 82583V GbE Controller Datasheet http://download.intel.com/design/network/datashts/322114.pdf"
 */
+#define VENDOR_ID_PR6120_NIC	0x8086L
+#define DEVICE_ID_PR6120_NIC	0xABCDL
+
 
 #include <vxWorks.h>
 #include <intLib.h>
@@ -272,6 +275,7 @@ LOCAL struct vxbDeviceMethod geiMethods[] =
 LOCAL struct vxbPciID geiPciDevIDList[] =
     {
         /* { devID, vendID } */
+    	{ DEVICE_ID_PR6120_NIC, VENDOR_ID_PR6120_NIC },
 
         { INTEL_DEVICEID_82543GC_COPPER, INTEL_VENDORID },
         { INTEL_DEVICEID_82543GC_FIBER, INTEL_VENDORID },
@@ -760,7 +764,15 @@ LOCAL void geiInstInit2
         pDrvCtrl->geiDevType = GEI_DEVTYPE_ADVANCED;
         pDrvCtrl->geiMiiPhyAddr = 1;
         }
-
+    
+    /* Detect PR6120 */
+    
+    if(pDrvCtrl->geiDevId == DEVICE_ID_PR6120_NIC)
+    {
+    	pDrvCtrl->geiDevType = 0;
+    	pDrvCtrl->geiMiiPhyAddr = 1;
+    }
+     
     for (i = 0; i < VXB_MAXBARS; i++)
         {
         if (pDev->regBaseFlags[i] == VXB_REG_MEM)
@@ -817,7 +829,14 @@ LOCAL void geiInstInit2
         pDrvCtrl->geiDevId > INTEL_DEVICEID_ICH8_IGP_AMT) &&
         pDrvCtrl->geiDevId != INTEL_DEVICEID_82567V3)
         pDrvCtrl->geiTbi = TRUE;
-
+    
+    /* Detect PR6120 */
+    
+    if(pDrvCtrl->geiDevId == DEVICE_ID_PR6120_NIC)
+    {
+    	pDrvCtrl->geiTbi = FALSE;
+    }
+    
     /* Reset the chip */
 
     geiReset (pDev);
@@ -989,7 +1008,14 @@ LOCAL void geiInstInit2
         pDrvCtrl->geiDevId <= INTEL_DEVICEID_82544GC_LOM) &&
         CSR_READ_4(pDev, GEI_STS) & GEI_STS_PCIX_MODE)
         pDrvCtrl->gei82544PcixWar = TRUE;
-
+    
+    /* Detect PR6120 */
+    
+    if(pDrvCtrl->geiDevId == DEVICE_ID_PR6120_NIC)
+    {
+    	pDrvCtrl->gei82544PcixWar = FALSE;
+    }
+    
     return;
     }
 
@@ -2872,13 +2898,24 @@ LOCAL END_OBJ * geiEndLoad
     pDrvCtrl->geiCaps.csum_flags_rx |= CSUM_VLAN;
     pDrvCtrl->geiCaps.cap_available |= IFCAP_VLAN_HWTAGGING;
     pDrvCtrl->geiCaps.cap_enabled |= IFCAP_VLAN_HWTAGGING;
-
+    
+    /* Detect PR6120 */
+    
+    if(pDrvCtrl->geiDevId == DEVICE_ID_PR6120_NIC)
+    {
+    	/* Currently remove all capabilities */
+    	pDrvCtrl->geiCaps.csum_flags_tx = 0;
+    	pDrvCtrl->geiCaps.csum_flags_rx = 0;
+    	pDrvCtrl->geiCaps.cap_available = 0;
+    	pDrvCtrl->geiCaps.cap_enabled = 0;
+    }
+    
     if (pDrvCtrl->geiMaxMtu == GEI_JUMBO_MTU)
         {
         pDrvCtrl->geiCaps.cap_available |= IFCAP_JUMBO_MTU;
         pDrvCtrl->geiCaps.cap_enabled |= IFCAP_JUMBO_MTU;
         }
-
+    
     /*
      * See if the ICS allows us to read currently
      * pending interrupts. If so, we're on real hardware,
