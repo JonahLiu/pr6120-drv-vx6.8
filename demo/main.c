@@ -44,6 +44,7 @@ typedef struct IOChannel{
 	void *handle;
 	op_read read;
 	op_write write;
+	BOOL ready;
 }IOChannel_t;
 
 typedef struct IOPeer{
@@ -75,7 +76,7 @@ static void* Dispatch(void *pdata)
 					pPeer->i, pCIn->name, pCOut->name, buf);
 			ret=write(fdbg,msgbuf,strlen(msgbuf));
 		}
-	}while(n>0);
+	}while(n>=0);
 	sprintf(msgbuf,"CH%d(%s -> %s) Exit\n",pPeer->i, pCIn->name, pCOut->name);
 	write(fdbg,msgbuf,strlen(msgbuf));
 	pthread_exit(NULL);
@@ -100,6 +101,8 @@ static int InitSerialChannel(IOChannel_t *pCh, char *fn, int baud, int parity)
 	int flag;	
 	SerialPort_t *serPort;
 	
+	pCh->ready=FALSE;
+	
 	fd=open(fn,O_RDWR);	
 	if(fd==ERROR)
 		return -1;
@@ -120,7 +123,7 @@ static int InitSerialChannel(IOChannel_t *pCh, char *fn, int baud, int parity)
 	pCh->handle=serPort;
 	pCh->read=SerialRead;
 	pCh->write=SerialWrite;
-	
+	pCh->ready=TRUE;
 	return 0;
 }
 
@@ -144,6 +147,8 @@ static int InitUdpChannel(IOChannel_t *pCh, char *src_ip, int src_port, char *ds
 {
 	int fd;
 	UdpPort_t *udpPort;
+	
+	pCh->ready = FALSE;
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd == ERROR)
@@ -171,6 +176,7 @@ static int InitUdpChannel(IOChannel_t *pCh, char *src_ip, int src_port, char *ds
 	pCh->handle=udpPort;
 	pCh->read=UdpRead;
 	pCh->write=UdpWrite;
+	pCh->ready = TRUE;
 	
 	sprintf(pCh->name,"UDP%d",src_port);
 
@@ -256,12 +262,20 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	WNCAN_CHNCONFIG chncfg;
 	WNCAN_CONFIG devcfg;
 	
+	pCh->ready=FALSE;
+	
 	fdCtr=open(fn,O_RDWR,0);
 	if(fdCtr==ERROR)
 		return -1;
 	
-	/* Start CAN device */
-	ioctl(fdCtr, WNCAN_HALT, FALSE);
+	/* To get a clean state */
+	close(fdCtr);
+	fdCtr=open(fn,O_RDWR,0);
+	if(fdCtr==ERROR)
+		return -1;	
+			
+	/* Reset CAN device */
+	ioctl(fdCtr, WNCAN_HALT, TRUE);
 	
 	/* Read and update device configuration */
 	devcfg.flags = WNCAN_CFG_INFO | WNCAN_CFG_GBLFILTER | WNCAN_CFG_BITTIMING;
@@ -274,6 +288,9 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	devcfg.filter.extended = ext;
 	
 	UpdateBaudRate(&devcfg, baud);	
+	
+	if(ioctl(fdCtr, WNCAN_CONFIG_SET, (int)&devcfg) != OK)
+			return -1;
 	
 	/* Get a Tx channel */
 	if(ioctl(fdCtr, WNCAN_TXCHAN_GET, (int)&txchan) != OK)
@@ -309,6 +326,9 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 
 	ioctl(fdRx, WNCAN_CHN_ENABLE, TRUE);
 	
+	/* Start CAN device */
+	ioctl(fdCtr, WNCAN_HALT, FALSE);
+	
 	/* Initialize port data */
 	canPort=malloc(sizeof(CanPort_t));
 	
@@ -321,6 +341,7 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	sprintf(pCh->name,"%s",fn);
 	pCh->read=CanRead;
 	pCh->write=CanWrite;
+	pCh->ready=TRUE;
 	
 	return 0;
 }
@@ -328,6 +349,9 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 
 static int LinkIOChannel(IOPeer_t *pPeer, IOChannel_t *pChSrc, IOChannel_t *pChDst)
 {
+	if(pChSrc->ready==FALSE || pChDst->ready==FALSE)
+		return -1;
+	
 	pPeer->pCIn=pChSrc;
 	pPeer->pCOut=pChDst;
 	pthread_create(&pPeer->thread,NULL,Dispatch,pPeer);
