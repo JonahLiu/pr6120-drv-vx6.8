@@ -186,14 +186,24 @@ static int InitUdpChannel(IOChannel_t *pCh, char *src_ip, int src_port, char *ds
 static int CanRead(void *handle, char *buffer, size_t maxbytes)
 {
 	WNCAN_CHNMSG rxdata;
+	WNCAN_BUSINFO businfo;
 	struct fd_set readFds;
+	int n;
 	CanPort_t *port=(CanPort_t*)handle;
 	int fd=port->fdRx;
 	FD_ZERO(&readFds);
 	FD_SET(fd, &readFds);
 	select(fd+1, &readFds, NULL, NULL, NULL);
-	if(read(fd, (char*)&rxdata, sizeof(rxdata))!=sizeof(rxdata))
+	ioctl(port->fdCtr, WNCAN_BUSINFO_GET, (int)&businfo);
+	if(businfo.busStatus || businfo.busError)
+		return -1;	
+	
+	n=read(fd, (char*)&rxdata, sizeof(rxdata));
+	if(n==0)
+		return 0;
+	if(n!=sizeof(rxdata))
 		return -1;
+
 	if(rxdata.len)
 		memcpy(buffer,rxdata.data,rxdata.len);
 	return rxdata.len;
@@ -237,15 +247,37 @@ static int CanWrite(void *handle, char *buffer, size_t nbytes)
 
 static void UpdateBaudRate(WNCAN_CONFIG *cfg, int baud)
 {
+	
+//#  define CAN_TIM0_10K		  49
+//#  define CAN_TIM1_10K		0x1c
+//#  define CAN_TIM0_20K		  24	
+//#  define CAN_TIM1_20K		0x1c
+//#  define CAN_TIM0_40K		0x89	/* Old Bit Timing Standard of port */
+//#  define CAN_TIM1_40K		0xEB	/* Old Bit Timing Standard of port */
+//#  define CAN_TIM0_50K		   9
+//#  define CAN_TIM1_50K		0x1c
+//#  define CAN_TIM0_100K              4    /* sp 87%, 16 abtastungen, sjw 1 */
+//#  define CAN_TIM1_100K           0x1c
+//#  define CAN_TIM0_125K		   3
+//#  define CAN_TIM1_125K		0x1c
+//#  define CAN_TIM0_250K		   1
+//#  define CAN_TIM1_250K		0x1c
+//#  define CAN_TIM0_500K		   0
+//#  define CAN_TIM1_500K		0x1c
+//#  define CAN_TIM0_800K		   0
+//#  define CAN_TIM1_800K		0x16
+//#  define CAN_TIM0_1000K	   0
+//#  define CAN_TIM1_1000K	0x14
+	
 	ULONG sysClkFreq;
 	ULONG ui;	
 	
 	sysClkFreq = cfg->info.xtalfreq/2; /* CDR default to 0 */
 	
 	cfg->bittiming.oversample = FALSE;
-	cfg->bittiming.sjw = 3;
-	cfg->bittiming.tseg1 = 3;
-	cfg->bittiming.tseg2 = 2;
+	cfg->bittiming.sjw = 0;
+	cfg->bittiming.tseg1 = 4;
+	cfg->bittiming.tseg2 = 1;
 	
 	ui = (cfg->bittiming.tseg1+1)+(cfg->bittiming.tseg2+1)+1;
 	
