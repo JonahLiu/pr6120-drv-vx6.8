@@ -29,6 +29,14 @@ modification history
 #endif
 
 
+#ifndef PR6120_CAN_DEVIO_NAME
+#define PR6120_CAN_DEVIO_NAME	"can"
+#endif
+
+#ifndef MAX_PR6120_CAN_BOARDS
+#define MAX_PR6120_CAN_BOARDS	(1)
+#endif
+
 /* extern references */
 extern STATUS pr6120_can_establishLinks(struct WNCAN_Device *pDev);
 extern STATUS pr6120_can_close(struct WNCAN_Device *pDev);

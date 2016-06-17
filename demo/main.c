@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <strings.h>
+#include <signal.h>
 #include "can.h"
 
 static int fdbg;
@@ -195,8 +196,8 @@ static int CanRead(void *handle, char *buffer, size_t maxbytes)
 	FD_SET(fd, &readFds);
 	select(fd+1, &readFds, NULL, NULL, NULL);
 	ioctl(port->fdCtr, WNCAN_BUSINFO_GET, (int)&businfo);
-	if(businfo.busStatus || businfo.busError)
-		return -1;	
+	//if(businfo.busStatus || businfo.busError)
+	//	return -1;	
 	
 	n=read(fd, (char*)&rxdata, sizeof(rxdata));
 	if(n==0)
@@ -216,7 +217,7 @@ static int CanWrite(void *handle, char *buffer, size_t nbytes)
 	struct fd_set writeFds;
 	CanPort_t *port=(CanPort_t*)handle;
 	int fd=port->fdTx;
-	txdata.id = 0x19a;
+	txdata.id = (ULONG)handle; /* just for test */
 	txdata.extId = port->ext;
 	txdata.rtr = FALSE;
 	total=0;
@@ -306,9 +307,6 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	if(fdCtr==ERROR)
 		return -1;	
 			
-	/* Reset CAN device */
-	ioctl(fdCtr, WNCAN_HALT, TRUE);
-	
 	/* Read and update device configuration */
 	devcfg.flags = WNCAN_CFG_INFO | WNCAN_CFG_GBLFILTER | WNCAN_CFG_BITTIMING;
 	
@@ -402,7 +400,7 @@ int main(int argc, char **argv)
 	IOPeer_t peer[12];
 	int i;
 	
-	fdbg=open("/pcConsole/0",O_WRONLY);
+	fdbg=open("/pcConsole/0",O_RDWR);
 	sprintf(msgbuf,"Start Test...\n");
 	write(fdbg,msgbuf,strlen(msgbuf));
 	
@@ -417,11 +415,11 @@ int main(int argc, char **argv)
 	InitSerialChannel(&chUart[3], "/tyCo/5", 115200, 1);
 	
 	InitCanChannel(&chCan[0],"/can/0",1000000,0,0,FALSE);
-	InitCanChannel(&chCan[1],"/can/1",1000000,0,0,FALSE);
+	InitCanChannel(&chCan[1],"/can/1",1000000,1,0,FALSE);
 	
 	for(i=0;i<6;i++)
 	{
-		InitUdpChannel(&chUdp[i],"192.168.0.40",10000+i,"192.168.0.20",10000+i);
+		InitUdpChannel(&chUdp[i],"192.168.0.40",10000+i,"192.168.0.255",10000+i);
 	}
 	
 	LinkIOChannel(&peer[0], &chUart[0], &chUdp[0]);
@@ -436,7 +434,7 @@ int main(int argc, char **argv)
 	LinkIOChannel(&peer[9], &chUdp[4], &chCan[0]);
 	LinkIOChannel(&peer[10], &chCan[1], &chUdp[5]);
 	LinkIOChannel(&peer[11], &chUdp[5], &chCan[1]);	
-	
+		
 	pthread_exit(NULL);
 	return 0;
 }
