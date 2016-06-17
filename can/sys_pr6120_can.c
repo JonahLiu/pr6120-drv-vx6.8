@@ -35,6 +35,7 @@ the PR6120 CAN card.
 #include "CAN/canBoard.h"
 #include "CAN/i82527.h"
 #include "CAN/sja1000.h"
+#include <CAN/sja1000Offsets.h>
 #include "CAN/private/pr6120_can.h"
 
 #define DEVICE_ID_PR6120_CAN       0xC204L /* device ID */
@@ -80,6 +81,78 @@ extern void PR6120_CAN_EnableIRQ(struct WNCAN_Device *pDev);
 extern void PR6120_CAN_DisableIRQ(struct WNCAN_Device *pDev);
 extern STATUS CAN_DEVICE_establishLinks(WNCAN_DEVICE *pDev, WNCAN_BoardType brdType, WNCAN_ControllerType ctrlType);
 
+
+/************************************************************************
+*
+* SJA1000_GetIntStatus - get the interrupt status on the controller
+*
+* This function returns the interrupt status on the controller: 
+*
+*    WNCAN_INT_NONE     = no interrupt occurred
+*    WNCAN_INT_ERROR    = bus error
+*    WNCAN_INT_TX       = interrupt resuting from a CAN transmission
+*    WNCAN_INT_RX       = interrupt resulting form message reception
+*    WNCAN_INT_BUS_OFF  = interrupt resulting from bus off condition
+*    WNCAN_INT_WAKE_UP  = interrupt resulting from controller waking up
+*                         after being put in sleep mode
+*    WNCAN_INT_SPURIOUS = unknown interrupt
+*
+* NOTE: If the interrupt was caused by the transmission or reception of a 
+* message, the channel number that generated the interrupt is set; otherwise,
+* this value is undefined.
+*
+* ERRNO: N/A
+*
+*/
+static WNCAN_IntType SJA1000_GetIntStatus
+      (
+          struct WNCAN_Device *pDev,
+          UCHAR *channelNum
+          )
+{
+    UCHAR       regInt;
+    WNCAN_IntType   intStatus=WNCAN_INT_NONE;
+        UCHAR regStatus;
+
+    /* read the interrupt register */
+    regInt = pDev->pBrd->canInByte(pDev, SJA1000_IR);
+
+        if(regInt & IR_RI) {
+                /*receive interrupt*/
+        intStatus = WNCAN_INT_RX;
+        *channelNum = 0;
+        }
+        
+        if( regInt & IR_TI) {
+                /*transmit interrupt*/
+        intStatus = WNCAN_INT_TX;
+        *channelNum = 1;
+        }
+
+        if(regInt & IR_WUI)
+        {
+                intStatus = WNCAN_INT_WAKE_UP;
+        }
+
+        /*flag WNCAN_INT_ERROR, if data overrun error int, or
+          bus error int is detected */
+        if(regInt & IR_BEI) {
+                /*error interrupt*/
+        intStatus = WNCAN_INT_ERROR;
+        }
+
+        if(regInt & IR_EI) {
+                /*bus off interrupt*/
+                /* read the status register */
+        regStatus = pDev->pBrd->canInByte(pDev, SJA1000_SR);
+
+                if(regStatus & SJA1000_SR_BS)
+                        intStatus = WNCAN_INT_BUS_OFF;
+        }
+        
+    return intStatus;
+}
+
 /************************************************************************
 *
 * PR6120_CAN_ISR - board-level isr for PR6120 CAN board
@@ -100,17 +173,48 @@ static void PR6120_CAN_ISR
     UINT i;
 
     /* disable the interrupt. */
-    PR6120_CAN_DisableIRQ(&pDE->canDevice[0]);
+    //PR6120_CAN_DisableIRQ(&pDE->canDevice[0]);
 
     for (i = 0; i < PR6120_CAN_MAX_CONTROLLERS; i++)
     {
         if(pDE->allocated[i])
         {
-            sja1000ISR((ULONG)&pDE->canDevice[i]);
+        	WNCAN_DEVICE     *pDev = &pDE->canDevice[i];
+        	WNCAN_IntType   intStatus=WNCAN_INT_NONE;
+        	UCHAR chnNum;
+        	
+        	/* notify board that we're entering isr */
+        	if(pDev->pBrd->onEnterISR)
+        	    pDev->pBrd->onEnterISR(pDev);
+        	
+        	/* Get the interrupt status */
+        	intStatus = SJA1000_GetIntStatus((void*)pDev, &chnNum);
+
+        	if (intStatus != WNCAN_INT_NONE)
+        	{
+        	                 
+        	    pDev->pISRCallback(pDev, intStatus, chnNum);
+
+				if (intStatus == WNCAN_INT_RX) {
+					/* release the receive buffer */
+					/* this will temporarily cleat RI bit */
+					//pDev->pBrd->canOutByte(pDev, SJA1000_CMR, CMR_RRB);
+				} else if (intStatus == WNCAN_INT_ERROR) {
+					/* clear bei interrupt flag */
+					pDev->pBrd->canInByte(pDev, SJA1000_ECC);
+				} else if (intStatus == WNCAN_INT_TX) {
+					/* notify channel available to TX again */
+					pDev->pISRCallback(pDev, WNCAN_INT_TXCLR, chnNum);
+				}
+			}
+        	
+        	/* notify board that we're leaving isr */
+        	if(pDev->pBrd->onLeaveISR)
+        	    pDev->pBrd->onLeaveISR(pDev);
         }
     }
     /* Enable the interrupt. */
-    PR6120_CAN_EnableIRQ(&pDE->canDevice[0]);
+    //PR6120_CAN_EnableIRQ(&pDE->canDevice[0]);
 }
 
 
