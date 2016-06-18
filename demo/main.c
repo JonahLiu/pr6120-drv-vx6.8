@@ -14,12 +14,17 @@
 #include <signal.h>
 #include "can.h"
 
-static int fdbg;
-static char msgbuf[256];
 
-static const char *stopMsg="!STOP";
 
-static BOOL stop=FALSE;
+#define MAX_CHANNEL	(32)
+#define MAX_LINK		(64)
+
+typedef enum {
+	UNKNOWN_CHANNEL,
+	SERIAL_CHANNEL,
+	CAN_CHANNEL,
+	UDP_CHANNEL,
+}ChannelType_t;
 
 typedef int (*op_read)(void *handle, char *buffer, size_t maxbytes);
 typedef int (*op_write)(void *handle, char *buffer, size_t nbytes);
@@ -45,7 +50,7 @@ typedef struct CanPort{
 
 typedef struct IOChannel{
 	char name[128];
-	//int type;
+	ChannelType_t type;
 	void *handle;
 	op_read read;
 	op_write write;
@@ -59,6 +64,51 @@ typedef struct IOPeer{
 	pthread_t thread;
 	BOOL running;
 }IOPeer_t;
+
+static int fdbg;
+static char msgbuf[256];
+
+static IOChannel_t ch[MAX_CHANNEL];
+static IOPeer_t peer[MAX_LINK];
+
+static int chIdx=0;
+static int lnIdx=0;
+
+static const char *stopMsg="!STOP";
+
+static BOOL stop=FALSE;
+
+static char defaultCfgFile[]="/ata1a/demo.cfg";
+
+static char CfgText[4096]=
+"SERIAL 2,115200,1 \n" 
+"SERIAL 3,115200,1 \n" 
+"SERIAL 4,115200,1 \n" 
+"SERIAL 5,115200,1 \n" 
+"CAN 0,1000000,0,0,0 \n"
+"CAN 1,1000000,0,0,0 \n"
+"UDP 10000,192.168.0.40,10000,192.168.0.255 \n"
+"UDP 10001,192.168.0.40,10001,192.168.0.255 \n"
+"UDP 10002,192.168.0.40,10002,192.168.0.255 \n"
+"UDP 10003,192.168.0.40,10003,192.168.0.255 \n"
+"UDP 10004,192.168.0.40,10004,192.168.0.255 \n"
+"UDP 10005,192.168.0.40,10005,192.168.0.255 \n"
+"LINK 0,6 \n"
+"LINK 6,0 \n"
+"LINK 1,7 \n"
+"LINK 7,1 \n"
+"LINK 2,8 \n"
+"LINK 8,2 \n"
+"LINK 3,9 \n"
+"LINK 9,3 \n"
+"LINK 4,10 \n"
+"LINK 10,4 \n"
+"LINK 5,11 \n"
+"LINK 11,5 \n"
+;
+
+static size_t CfgSize;
+
 
 static void* Dispatch(void *pdata)
 {
@@ -116,8 +166,8 @@ static int InitSerialChannel(IOChannel_t *pCh, char *fn, int baud, int parity)
 	if(fd==ERROR)
 		return -1;
 	
-	//ioctl(fd, FIOSETOPTIONS, OPT_LINE);
-	ioctl(fd, FIOSETOPTIONS, OPT_RAW);
+	ioctl(fd, FIOSETOPTIONS, OPT_LINE);
+	//ioctl(fd, FIOSETOPTIONS, OPT_RAW);
 	ioctl(fd, SIO_BAUD_SET, baud);
 	flag = CS8;
 	if(parity>0)
@@ -129,6 +179,8 @@ static int InitSerialChannel(IOChannel_t *pCh, char *fn, int baud, int parity)
 	sprintf(pCh->name,"%s",fn);
 	serPort=malloc(sizeof(SerialPort_t));
 	serPort->fd=fd;
+	
+	pCh->type = SERIAL_CHANNEL;
 	pCh->handle=serPort;
 	pCh->read=SerialRead;
 	pCh->write=SerialWrite;
@@ -196,6 +248,8 @@ static int InitUdpChannel(IOChannel_t *pCh, char *src_ip, int src_port, char *ds
 	udpPort->sa_dst_len = sizeof(udpPort->sa_dst);
 
 	udpPort->fd=fd;
+	
+	pCh->type = UDP_CHANNEL;
 	pCh->handle=udpPort;
 	pCh->read=UdpRead;
 	pCh->write=UdpWrite;
@@ -397,6 +451,7 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	canPort->fdRx = fdRx;
 	canPort->ext = ext;
 	
+	pCh->type = CAN_CHANNEL;
 	pCh->handle=canPort;
 	sprintf(pCh->name,"%s",fn);
 	pCh->read=CanRead;
@@ -423,6 +478,24 @@ static void ReleaseCanChannel(IOChannel_t *pCh)
 	pCh->ready=FALSE;
 }
 
+static void ReleaseChannel(IOChannel_t *pCh)
+{
+	if(pCh->ready)
+	{
+		switch(pCh->type){
+		case SERIAL_CHANNEL:
+			ReleaseSerialChannel(pCh);
+			break;
+		case CAN_CHANNEL:
+			ReleaseCanChannel(pCh);
+			break;
+		case UDP_CHANNEL:
+			ReleaseUdpChannel(pCh);
+			break;
+		}
+	}
+}
+
 static int LinkIOChannel(IOPeer_t *pPeer, IOChannel_t *pChSrc, IOChannel_t *pChDst)
 {
 	pPeer->running=FALSE;
@@ -444,15 +517,10 @@ void SigHandler(int signum)
 	stop=TRUE;
 }
 
-int main(int argc, char **argv)
+int tmp_main(int argc, char **argv)
 {
 	int fout;
-	int fsio[4];
-	int fcio[2];
-	int fnio[6];
-	IOChannel_t chUart[4];
-	IOChannel_t chUdp[6];
-	IOChannel_t chCan[2];
+	IOChannel_t ch[12];
 	IOPeer_t peer[12];
 	int i;
 	
@@ -463,33 +531,24 @@ int main(int argc, char **argv)
 	for(i=0;i<12;i++)
 	{
 		peer[i].i=i;
+		peer[i].running=FALSE;
 	}
 	
-	InitSerialChannel(&chUart[0], "/tyCo/2", 115200, 1);
-	InitSerialChannel(&chUart[1], "/tyCo/3", 115200, 1);
-	InitSerialChannel(&chUart[2], "/tyCo/4", 115200, 1);
-	InitSerialChannel(&chUart[3], "/tyCo/5", 115200, 1);
+	InitSerialChannel(&ch[0], "/tyCo/2", 115200, 1);
+	InitSerialChannel(&ch[1], "/tyCo/3", 115200, 1);
+	InitSerialChannel(&ch[2], "/tyCo/4", 115200, 1);
+	InitSerialChannel(&ch[3], "/tyCo/5", 115200, 1);
 	
-	InitCanChannel(&chCan[0],"/can/0",1000000,0,0,FALSE);
-	InitCanChannel(&chCan[1],"/can/1",1000000,1,0,FALSE);
+	InitCanChannel(&ch[4],"/can/0",1000000,0,0,FALSE);
+	InitCanChannel(&ch[5],"/can/1",1000000,1,0,FALSE);
 	
 	for(i=0;i<6;i++)
 	{
-		InitUdpChannel(&chUdp[i],"192.168.0.40",10000+i,"192.168.0.255",10000+i);
+		InitUdpChannel(&ch[6+i],"192.168.0.40",10000+i,"192.168.0.255",10000+i);
 	}
 	
-	LinkIOChannel(&peer[0], &chUart[0], &chUdp[0]);
-	LinkIOChannel(&peer[1], &chUdp[0], &chUart[0]);
-	LinkIOChannel(&peer[2], &chUart[1], &chUdp[1]);
-	LinkIOChannel(&peer[3], &chUdp[1], &chUart[1]);
-	LinkIOChannel(&peer[4], &chUart[2], &chUdp[2]);
-	LinkIOChannel(&peer[5], &chUdp[2], &chUart[2]);
-	LinkIOChannel(&peer[6], &chUart[3], &chUdp[3]);
-	LinkIOChannel(&peer[7], &chUdp[3], &chUart[3]);
-	LinkIOChannel(&peer[8], &chCan[0], &chUdp[4]);
-	LinkIOChannel(&peer[9], &chUdp[4], &chCan[0]);
-	LinkIOChannel(&peer[10], &chCan[1], &chUdp[5]);
-	LinkIOChannel(&peer[11], &chUdp[5], &chCan[1]);
+	LinkIOChannel(&peer[0], &ch[4], &ch[10]);
+	LinkIOChannel(&peer[1], &ch[10], &ch[4]);
 	
 	sleep(1);
 	
@@ -507,16 +566,235 @@ int main(int argc, char **argv)
 	sprintf(msgbuf,"Stop Test...");
 	write(fdbg,msgbuf,strlen(msgbuf));
 	
-	ReleaseSerialChannel(&chUart[0]);
-	ReleaseSerialChannel(&chUart[1]);
-	ReleaseSerialChannel(&chUart[2]);
-	ReleaseSerialChannel(&chUart[3]);
-	ReleaseCanChannel(&chCan[0]);
-	ReleaseCanChannel(&chCan[1]);
-	for(i=0;i<6;i++)
+	for(i=0;i<12;i++)
 	{
-		ReleaseUdpChannel(&chUdp[i]);
+		ReleaseChannel(&ch[i]);
+	}	
+	
+	sprintf(msgbuf,"Done\n");
+	write(fdbg,msgbuf,strlen(msgbuf));
+	pthread_exit(NULL);
+	return 0;
+}
+
+
+int ParseSerOpt(char *serOpt, size_t size)
+{
+	int port;
+	int baud;
+	int parity;
+	char fnStr[128];
+	if(sscanf(serOpt,"%d,%d,%d",&port,&baud,&parity)!=3)
+		return -1;
+	
+	sprintf(fnStr,"/tyCo/%d",port);
+	
+	InitSerialChannel(&ch[chIdx], fnStr, baud, parity);
+	chIdx++;
+	
+	return 0;	
+}
+
+int ParseCanOpt(char *canOpt, size_t size)
+{
+	int port;
+	int baud;
+	int id;
+	int mask;
+	int ext;
+	char fnStr[128];
+	if(sscanf(canOpt,"%d,%d,%d,%d,%d", &port, &baud, &id, &mask, &ext)!=5)
+		return -1;
+	
+	sprintf(fnStr,"/can/%d",port);
+	
+	InitCanChannel(&ch[chIdx], fnStr, baud, id, mask, ext);
+	chIdx++;
+	
+	return 0;	
+}
+
+int ParseUdpOpt(char *udpOpt, size_t size)
+{
+	int srcPort;
+	int dstPort;
+	char srcIp[32];
+	char dstIp[32];
+	char *pSplit;
+	
+	for(pSplit=index(udpOpt,',');pSplit;pSplit=index(pSplit,','))
+		*pSplit='\n';
+	
+	pSplit=udpOpt;
+	
+	if(sscanf(pSplit,"%d",&srcPort)!=1)
+		return -1;
+	
+	pSplit=index(pSplit,'\n');
+	if(pSplit==NULL)
+		return -1;
+	pSplit++;
+	
+	if(sscanf(pSplit,"%s",srcIp)!=1)
+		return -1;
+	
+	pSplit=index(pSplit,'\n');
+	if(pSplit==NULL)
+		return -1;
+	pSplit++;
+	
+	if(sscanf(pSplit,"%d",&dstPort)!=1)
+		return -1;
+	
+	pSplit=index(pSplit,'\n');
+	if(pSplit==NULL)
+		return -1;
+	pSplit++;
+	
+	if(sscanf(pSplit,"%s",dstIp)!=1)
+		return -1;
+
+	InitUdpChannel(&ch[chIdx], srcIp, srcPort, dstIp, dstPort);
+	chIdx++;
+	
+	return 0;		
+}
+
+int ParseLinkOpt(char *linkOpt, size_t size)
+{
+	int srcCh;
+	int dstCh;
+	if(sscanf(linkOpt,"%d,%d",&srcCh,&dstCh)!=2)
+		return -1;
+		
+	LinkIOChannel(&peer[lnIdx], &ch[srcCh], &ch[dstCh]);
+	lnIdx++;
+	
+	return 0;	
+	
+}
+
+
+int ParseLine(char *cfgLine, size_t size)
+{
+	char typeStr[16];
+	char optStr[128];
+	if(sscanf(cfgLine,"%s %s",typeStr, optStr)!=2)
+		return -1;
+	
+	if(strcmp(typeStr,"SERIAL")==0)
+		if(ParseSerOpt(optStr,strlen(optStr)))
+			return -1;
+		else
+			return 0;
+	
+	if(strcmp(typeStr,"CAN")==0)
+		if(ParseCanOpt(optStr,strlen(optStr)))
+			return -1;
+		else
+			return 0;
+	
+	if(strcmp(typeStr,"UDP")==0)
+		if(ParseUdpOpt(optStr,strlen(optStr)))
+			return -1;
+		else
+			return 0;
+		
+	if(strcmp(typeStr,"LINK")==0)
+		if(ParseLinkOpt(optStr,strlen(optStr)))
+			return -1;
+		else
+			return 0;
+	
+	return -1;
+}
+
+
+int ParseConfig(char *cfgText, size_t size)
+{
+	char *pFirst=cfgText;
+	char *pLast;
+	while(*pFirst)
+	{
+		while(*pFirst=='\n' || *pFirst=='\r')
+			pFirst++;
+		
+		pLast=index(pFirst,'\n');
+		if(pLast==NULL)
+			pLast=cfgText+size;
+		if(ParseLine(pFirst, pLast-pFirst))
+			return -1;
+		pFirst=pLast;
+
 	}
+	return 0;
+}
+
+
+int main(int argc, char **argv)
+{
+	int fout;
+	int fcfg;
+	char *cfgFile;
+
+	int i;
+	
+	fdbg=open("/pcConsole/0",O_RDWR);
+	sprintf(msgbuf,"Start Test...\n");
+	write(fdbg,msgbuf,strlen(msgbuf));
+	
+	for(i=0;i<MAX_LINK;i++)
+	{
+		peer[i].i=i;
+		peer[i].running=FALSE;
+	}
+	
+	if(argc>2)
+		return -1;
+	else if(argc==2)
+		cfgFile=argv[1];
+	else
+		cfgFile=defaultCfgFile;		
+	
+	fcfg=open(cfgFile,O_RDONLY);
+	if(fcfg<0)
+	{
+		sprintf(msgbuf,"%s not found, using defaults...\n", cfgFile);
+		write(fdbg,msgbuf,strlen(msgbuf));
+		CfgSize=strlen(CfgText);
+				
+	}else{
+		CfgSize=read(fcfg,CfgText,sizeof(CfgText));
+		if(CfgSize<=0)
+		{
+			sprintf(msgbuf,"Read %s error, using defaults...\n", cfgFile);
+			write(fdbg,msgbuf,strlen(msgbuf));
+			CfgSize=strlen(CfgText);			
+		}
+	}
+	
+	ParseConfig(CfgText, CfgSize);
+	
+	sleep(1);
+	
+	sprintf(msgbuf,"Test Running...\n");
+	write(fdbg,msgbuf,strlen(msgbuf));	
+	
+	for(i=0;i<lnIdx;i++)
+	{
+		if(peer[i].running)
+		{
+			pthread_join(peer[i].thread,NULL);
+		}
+	}
+	
+	sprintf(msgbuf,"Stop Test...");
+	write(fdbg,msgbuf,strlen(msgbuf));
+	
+	for(i=0;i<chIdx;i++)
+	{
+		ReleaseChannel(&ch[i]);
+	}	
 	
 	sprintf(msgbuf,"Done\n");
 	write(fdbg,msgbuf,strlen(msgbuf));
