@@ -195,7 +195,7 @@ static int CanRead(void *handle, char *buffer, size_t maxbytes)
 	FD_ZERO(&readFds);
 	FD_SET(fd, &readFds);
 	select(fd+1, &readFds, NULL, NULL, NULL);
-	ioctl(port->fdCtr, WNCAN_BUSINFO_GET, (int)&businfo);
+	//ioctl(port->fdCtr, WNCAN_BUSINFO_GET, (int)&businfo);
 	//if(businfo.busStatus || businfo.busError)
 	//	return -1;	
 	
@@ -300,12 +300,6 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	fdCtr=open(fn,O_RDWR,0);
 	if(fdCtr==ERROR)
 		return -1;
-	
-	/* To get a clean state */
-	close(fdCtr);
-	fdCtr=open(fn,O_RDWR,0);
-	if(fdCtr==ERROR)
-		return -1;	
 			
 	/* Read and update device configuration */
 	devcfg.flags = WNCAN_CFG_INFO | WNCAN_CFG_GBLFILTER | WNCAN_CFG_BITTIMING;
@@ -434,7 +428,7 @@ int main(int argc, char **argv)
 	LinkIOChannel(&peer[9], &chUdp[4], &chCan[0]);
 	LinkIOChannel(&peer[10], &chCan[1], &chUdp[5]);
 	LinkIOChannel(&peer[11], &chUdp[5], &chCan[1]);	
-		
+	
 	pthread_exit(NULL);
 	return 0;
 }

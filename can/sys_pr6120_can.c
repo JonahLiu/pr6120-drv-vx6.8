@@ -545,7 +545,7 @@ void sys_PR6120_CAN_canOutByte
     #endif
     #endif
 
-    addr = (UCHAR*)(memBase) + (offset + reg*4 + net*0x100);
+    addr = (UCHAR*)(memBase) + (offset + reg*4 + net*0x400);
 
     #ifdef DEBUG
     /* Read the data first */
@@ -594,7 +594,7 @@ UCHAR sys_PR6120_CAN_canInByte
     #endif
     #endif
     
-    addr = (UCHAR*)(memBase) + (offset + reg*4 + net*0x100);
+    addr = (UCHAR*)(memBase) + (offset + reg*4 + net*0x400);
     data = *(addr);
     
     return(data);
