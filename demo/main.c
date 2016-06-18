@@ -17,6 +17,10 @@
 static int fdbg;
 static char msgbuf[256];
 
+static const char *stopMsg="!STOP";
+
+static BOOL stop=FALSE;
+
 typedef int (*op_read)(void *handle, char *buffer, size_t maxbytes);
 typedef int (*op_write)(void *handle, char *buffer, size_t nbytes);
 
@@ -53,6 +57,7 @@ typedef struct IOPeer{
 	IOChannel_t *pCIn;
 	IOChannel_t *pCOut;
 	pthread_t thread;
+	BOOL running;
 }IOPeer_t;
 
 static void* Dispatch(void *pdata)
@@ -76,8 +81,11 @@ static void* Dispatch(void *pdata)
 			ret=snprintf(msgbuf,sizeof(msgbuf),"CH%d(%s -> %s): %s\n",
 					pPeer->i, pCIn->name, pCOut->name, buf);
 			ret=write(fdbg,msgbuf,strlen(msgbuf));
+			buf[strlen(stopMsg)]=0;
+			if(strcmp(buf, stopMsg)==0)
+				stop=TRUE;
 		}
-	}while(n>=0);
+	}while(n>=0 && stop==FALSE);
 	sprintf(msgbuf,"CH%d(%s -> %s) Exit\n",pPeer->i, pCIn->name, pCOut->name);
 	write(fdbg,msgbuf,strlen(msgbuf));
 	pthread_exit(NULL);
@@ -126,6 +134,20 @@ static int InitSerialChannel(IOChannel_t *pCh, char *fn, int baud, int parity)
 	pCh->write=SerialWrite;
 	pCh->ready=TRUE;
 	return 0;
+}
+
+static void ReleaseSerialChannel(IOChannel_t *pCh)
+{
+	if(pCh->ready)
+	{
+		SerialPort_t *serPort = pCh->handle;
+		close(serPort->fd);
+		free(serPort);
+	}
+	pCh->handle=NULL;
+	pCh->read=NULL;
+	pCh->write=NULL;
+	pCh->ready=FALSE;
 }
 
 static int UdpRead(void *handle, char *buffer, size_t maxbytes)
@@ -184,6 +206,20 @@ static int InitUdpChannel(IOChannel_t *pCh, char *src_ip, int src_port, char *ds
 	return 0;
 }
 
+static void ReleaseUdpChannel(IOChannel_t *pCh)
+{
+	if(pCh->ready)
+	{
+		UdpPort_t *udpPort = pCh->handle;
+		close(udpPort->fd);
+		free(udpPort);
+	}
+	pCh->handle = NULL;
+	pCh->read = NULL;
+	pCh->write = NULL;
+	pCh->ready = FALSE;
+}
+		
 static int CanRead(void *handle, char *buffer, size_t maxbytes)
 {
 	WNCAN_CHNMSG rxdata;
@@ -370,16 +406,42 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	return 0;
 }
 
+static void ReleaseCanChannel(IOChannel_t *pCh)
+{	
+	if(pCh->ready)
+	{
+		CanPort_t *canPort=pCh->handle;
+		ioctl(canPort->fdCtr, WNCAN_HALT, TRUE);
+		close(canPort->fdTx);
+		close(canPort->fdRx);
+		close(canPort->fdCtr);
+		free(canPort);
+	}
+	pCh->handle=NULL;
+	pCh->read=NULL;
+	pCh->write=NULL;
+	pCh->ready=FALSE;
+}
 
 static int LinkIOChannel(IOPeer_t *pPeer, IOChannel_t *pChSrc, IOChannel_t *pChDst)
 {
-	if(pChSrc->ready==FALSE || pChDst->ready==FALSE)
-		return -1;
-	
+	pPeer->running=FALSE;
 	pPeer->pCIn=pChSrc;
 	pPeer->pCOut=pChDst;
-	pthread_create(&pPeer->thread,NULL,Dispatch,pPeer);
+	
+	if(pChSrc->ready==FALSE || pChDst->ready==FALSE)
+		return -1;	
+
+	if(pthread_create(&pPeer->thread,NULL,Dispatch,pPeer))
+		return -1;
+	
+	pPeer->running=TRUE;
 	return 0;
+}
+
+void SigHandler(int signum)
+{
+	stop=TRUE;
 }
 
 int main(int argc, char **argv)
@@ -427,8 +489,37 @@ int main(int argc, char **argv)
 	LinkIOChannel(&peer[8], &chCan[0], &chUdp[4]);
 	LinkIOChannel(&peer[9], &chUdp[4], &chCan[0]);
 	LinkIOChannel(&peer[10], &chCan[1], &chUdp[5]);
-	LinkIOChannel(&peer[11], &chUdp[5], &chCan[1]);	
+	LinkIOChannel(&peer[11], &chUdp[5], &chCan[1]);
 	
+	sleep(1);
+	
+	sprintf(msgbuf,"Test Running...\n");
+	write(fdbg,msgbuf,strlen(msgbuf));	
+	
+	for(i=0;i<12;i++)
+	{
+		if(peer[i].running)
+		{
+			pthread_join(peer[i].thread,NULL);
+		}
+	}
+	
+	sprintf(msgbuf,"Stop Test...");
+	write(fdbg,msgbuf,strlen(msgbuf));
+	
+	ReleaseSerialChannel(&chUart[0]);
+	ReleaseSerialChannel(&chUart[1]);
+	ReleaseSerialChannel(&chUart[2]);
+	ReleaseSerialChannel(&chUart[3]);
+	ReleaseCanChannel(&chCan[0]);
+	ReleaseCanChannel(&chCan[1]);
+	for(i=0;i<6;i++)
+	{
+		ReleaseUdpChannel(&chUdp[i]);
+	}
+	
+	sprintf(msgbuf,"Done\n");
+	write(fdbg,msgbuf,strlen(msgbuf));
 	pthread_exit(NULL);
 	return 0;
 }
