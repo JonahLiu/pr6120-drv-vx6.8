@@ -4,6 +4,11 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <time.h>
+
+#ifdef __VXWORKS__
+#include <sockLib.h>
+#endif
 
 static struct sockaddr_in sa;
 static int sa_len;
@@ -13,6 +18,7 @@ void usage()
 	fprintf(stderr,"Usage: udpsend <ip address> <port>\n");
 }
 
+#ifdef USE_GETTIMEOFDAY
 double getTime()
 {
 	struct timeval tv;
@@ -22,6 +28,19 @@ double getTime()
 		tv.tv_usec/1000000.0;
 	return second;
 }
+
+#else
+
+double getTime()
+{
+	double second;
+	struct timespec tp;
+	clock_gettime(CLOCK_REALTIME, &tp);
+	second = tp.tv_sec + tp.tv_nsec/1000000000.0;
+	return second;
+}
+
+#endif /* USE_GETTIMEOFDAY */
 
 void SendMsg(int fd, int i, double t)
 {

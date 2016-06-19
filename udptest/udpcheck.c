@@ -5,10 +5,16 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#ifdef __VXWORKS__
+#include <sockLib.h>
+#endif
+
 static struct sockaddr_in sa;
 static int sa_len;
 static unsigned int idx=0;
-static double lastTime;
+static unsigned int total=0;
+static double lastTime=0;
+static double lastReport=0;
 
 void usage()
 {
@@ -38,6 +44,12 @@ void CheckMsg(char *buffer, size_t size)
 	if(i>idx+1)
 	{
 		fprintf(stderr,"Lost %d in %lf sec\n", i-idx-1, t-lastTime);
+	}
+	total++;
+	if(t-lastReport>1)
+	{
+		fprintf(stderr,"%d message received\n",total);
+		lastReport=t;
 	}
 	idx=i;
 	lastTime=t;
