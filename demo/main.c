@@ -12,9 +12,13 @@
 #include <sys/select.h>
 #include <strings.h>
 #include <signal.h>
+#include <errno.h>
 #include "can.h"
 
-
+#define LogMsg(...) \
+	do{	sprintf(msgbuf,__VA_ARGS__); \
+	write(fdbg,msgbuf,strlen(msgbuf)); \
+	}while(0)
 
 #define MAX_CHANNEL	(32)
 #define MAX_LINK		(64)
@@ -120,9 +124,8 @@ static void* Dispatch(void *pdata)
 	pPeer = (IOPeer_t *)pdata;
 	pCIn = pPeer->pCIn;
 	pCOut = pPeer->pCOut;
-	sprintf(msgbuf,"CH%d(%s -> %s) Start \n",
+	LogMsg("CH%d(%s -> %s) Start \n",
 			pPeer->i,pCIn->name,pCOut->name);
-	write(fdbg,msgbuf,strlen(msgbuf));
 	do{
 		n=pCIn->read(pCIn->handle,buf,sizeof(buf)-1);		
 		if(n>0){
@@ -136,8 +139,7 @@ static void* Dispatch(void *pdata)
 				stop=TRUE;
 		}
 	}while(n>=0 && stop==FALSE);
-	sprintf(msgbuf,"CH%d(%s -> %s) Exit\n",pPeer->i, pCIn->name, pCOut->name);
-	write(fdbg,msgbuf,strlen(msgbuf));
+	LogMsg("CH%d(%s -> %s) Exit\n",pPeer->i, pCIn->name, pCOut->name);
 	pthread_exit(NULL);
 	return NULL;
 }
@@ -164,7 +166,10 @@ static int InitSerialChannel(IOChannel_t *pCh, char *fn, int baud, int parity)
 	
 	fd=open(fn,O_RDWR);	
 	if(fd==ERROR)
+	{
+		LogMsg("Open serial port failed with error %d - %s\n",errno, strerror(errno));
 		return -1;
+	}
 	
 	ioctl(fd, FIOSETOPTIONS, OPT_LINE);
 	//ioctl(fd, FIOSETOPTIONS, OPT_RAW);
@@ -227,7 +232,10 @@ static int InitUdpChannel(IOChannel_t *pCh, char *src_ip, int src_port, char *ds
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd == ERROR)
+	{
+		LogMsg("Open socket failed with error %d - %s\n",errno, strerror(errno));
 		return fd;
+	}
 	
 	udpPort=malloc(sizeof(UdpPort_t));
 	
@@ -237,6 +245,7 @@ static int InitUdpChannel(IOChannel_t *pCh, char *src_ip, int src_port, char *ds
 	udpPort->sa_src_len = sizeof(udpPort->sa_src);
 	
 	if( bind(fd,(struct sockaddr *)&udpPort->sa_src , udpPort->sa_src_len) < 0){
+		LogMsg("Bind failed with error %d - %s\n",errno, strerror(errno));
 		close(fd);
 		fd = ERROR;
 		return fd;
@@ -389,7 +398,10 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	
 	fdCtr=open(fn,O_RDWR,0);
 	if(fdCtr==ERROR)
+	{
+		LogMsg("Open CAN device failed with error %d - %s\n",errno,strerror(errno));
 		return -1;
+	}
 			
 	/* Read and update device configuration */
 	devcfg.flags = WNCAN_CFG_INFO | WNCAN_CFG_GBLFILTER | WNCAN_CFG_BITTIMING;
@@ -419,7 +431,10 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	
 	fdTx=open(chfn,O_WRONLY,0);
 	if(fdTx==ERROR)
+	{
+		LogMsg("Open CAN channel failed with error %d - %s\n",errno,strerror(errno));
 		return -1;
+	}
 	
 	ioctl(fdTx, WNCAN_CHN_ENABLE, TRUE);
 	
@@ -428,7 +443,10 @@ static int InitCanChannel(IOChannel_t *pCh, char *fn, int baud, int id, int mask
 	
 	fdRx=open(chfn,O_RDONLY,0);
 	if(fdRx==ERROR)
+	{
+		LogMsg("Open CAN channel failed with error %d - %s\n",errno,strerror(errno));
 		return -1;
+	}
 		
 	chncfg.flags = WNCAN_CHNCFG_CHANNEL;
 	chncfg.channel.id = id;
@@ -525,8 +543,7 @@ int tmp_main(int argc, char **argv)
 	int i;
 	
 	fdbg=open("/pcConsole/0",O_RDWR);
-	sprintf(msgbuf,"Start Test...\n");
-	write(fdbg,msgbuf,strlen(msgbuf));
+	LogMsg("Start Test...\n");
 	
 	for(i=0;i<12;i++)
 	{
@@ -552,8 +569,7 @@ int tmp_main(int argc, char **argv)
 	
 	sleep(1);
 	
-	sprintf(msgbuf,"Test Running...\n");
-	write(fdbg,msgbuf,strlen(msgbuf));	
+	LogMsg("Test Running...\n");
 	
 	for(i=0;i<12;i++)
 	{
@@ -563,16 +579,14 @@ int tmp_main(int argc, char **argv)
 		}
 	}
 	
-	sprintf(msgbuf,"Stop Test...");
-	write(fdbg,msgbuf,strlen(msgbuf));
+	LogMsg("Stop Test...");
 	
 	for(i=0;i<12;i++)
 	{
 		ReleaseChannel(&ch[i]);
 	}	
 	
-	sprintf(msgbuf,"Done\n");
-	write(fdbg,msgbuf,strlen(msgbuf));
+	LogMsg("Done\n");
 	pthread_exit(NULL);
 	return 0;
 }
@@ -589,7 +603,9 @@ int ParseSerOpt(char *serOpt, size_t size)
 	
 	sprintf(fnStr,"/tyCo/%d",port);
 	
-	InitSerialChannel(&ch[chIdx], fnStr, baud, parity);
+	if(InitSerialChannel(&ch[chIdx], fnStr, baud, parity))
+		return -1;
+	
 	chIdx++;
 	
 	return 0;	
@@ -608,7 +624,9 @@ int ParseCanOpt(char *canOpt, size_t size)
 	
 	sprintf(fnStr,"/can/%d",port);
 	
-	InitCanChannel(&ch[chIdx], fnStr, baud, id, mask, ext);
+	if(InitCanChannel(&ch[chIdx], fnStr, baud, id, mask, ext))
+		return -1;
+	
 	chIdx++;
 	
 	return 0;	
@@ -654,7 +672,9 @@ int ParseUdpOpt(char *udpOpt, size_t size)
 	if(sscanf(pSplit,"%s",dstIp)!=1)
 		return -1;
 
-	InitUdpChannel(&ch[chIdx], srcIp, srcPort, dstIp, dstPort);
+	if(InitUdpChannel(&ch[chIdx], srcIp, srcPort, dstIp, dstPort))
+		return -1;
+	
 	chIdx++;
 	
 	return 0;		
@@ -714,18 +734,23 @@ int ParseConfig(char *cfgText, size_t size)
 {
 	char *pFirst=cfgText;
 	char *pLast;
+	while(*pFirst=='\n' || *pFirst=='\r' || *pFirst==' ' || *pFirst=='\t')
+		pFirst++;	 
 	while(*pFirst)
 	{
-		while(*pFirst=='\n' || *pFirst=='\r')
-			pFirst++;
-		
 		pLast=index(pFirst,'\n');
 		if(pLast==NULL)
 			pLast=cfgText+size;
 		if(ParseLine(pFirst, pLast-pFirst))
+		{
+			*pLast=0;
+			LogMsg("Failed: %s\n",pFirst);
 			return -1;
+		}
 		pFirst=pLast;
-
+		
+		while(*pFirst=='\n' || *pFirst=='\r' || *pFirst==' ' || *pFirst=='\t')
+			pFirst++;
 	}
 	return 0;
 }
@@ -738,10 +763,13 @@ int main(int argc, char **argv)
 	char *cfgFile;
 
 	int i;
-	
+	/* BUG: vxWorks has a limit of 16 open files and can not be changed*/
+	/* close some open files to reserve as many file descriptors */
+	close(STDIN_FILENO);
+	close(STDERR_FILENO);
+	close(STDOUT_FILENO);
 	fdbg=open("/pcConsole/0",O_RDWR);
-	sprintf(msgbuf,"Start Test...\n");
-	write(fdbg,msgbuf,strlen(msgbuf));
+	LogMsg("Start Test...\n");
 	
 	for(i=0;i<MAX_LINK;i++)
 	{
@@ -759,26 +787,27 @@ int main(int argc, char **argv)
 	fcfg=open(cfgFile,O_RDONLY);
 	if(fcfg<0)
 	{
-		sprintf(msgbuf,"%s not found, using defaults...\n", cfgFile);
-		write(fdbg,msgbuf,strlen(msgbuf));
+		LogMsg("%s not found, using defaults...\n", cfgFile);
 		CfgSize=strlen(CfgText);
 				
 	}else{
 		CfgSize=read(fcfg,CfgText,sizeof(CfgText));
 		if(CfgSize<=0)
 		{
-			sprintf(msgbuf,"Read %s error, using defaults...\n", cfgFile);
-			write(fdbg,msgbuf,strlen(msgbuf));
+			LogMsg("Read %s error, using defaults...\n", cfgFile);
 			CfgSize=strlen(CfgText);			
+		}else{
+			CfgText[CfgSize]=0;
 		}
 	}
 	
 	ParseConfig(CfgText, CfgSize);
 	
+	signal(SIGINT,SigHandler);
+	
 	sleep(1);
 	
-	sprintf(msgbuf,"Test Running...\n");
-	write(fdbg,msgbuf,strlen(msgbuf));	
+	LogMsg("Test Running...\n");
 	
 	for(i=0;i<lnIdx;i++)
 	{
@@ -788,16 +817,14 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	sprintf(msgbuf,"Stop Test...");
-	write(fdbg,msgbuf,strlen(msgbuf));
+	LogMsg("Stop Test...");
 	
 	for(i=0;i<chIdx;i++)
 	{
 		ReleaseChannel(&ch[i]);
 	}	
 	
-	sprintf(msgbuf,"Done\n");
-	write(fdbg,msgbuf,strlen(msgbuf));
+	LogMsg("Done\n");
 	pthread_exit(NULL);
 	return 0;
 }
