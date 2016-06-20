@@ -59,7 +59,7 @@ void CheckMsg(char *buffer, size_t size)
 int main(int argc, char **argv)
 {
 	int fd;
-	short src_port=29999;
+	short src_port=9999;
 
 	if(argc > 2)
 	{

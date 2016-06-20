@@ -54,7 +54,6 @@ void SendMsg(int fd, int i, double t)
 int main(int argc, char **argv)
 {
 	int fd;
-	short src_port=9999;
 	short dst_port=9999;
 	char *dst_ip="192.168.0.255";
 	unsigned long idx=1;
@@ -100,7 +99,7 @@ int main(int argc, char **argv)
 	{
 		now=getTime();
 		span=now-last;
-		if(span>0.0001)
+		if(span>0.001)
 		{
 			SendMsg(fd, idx++,now);
 			last=now;
