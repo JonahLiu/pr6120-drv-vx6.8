@@ -24,13 +24,13 @@ modification history
 #include "CAN/sja1000.h"
 #include "CAN/private/pr6120_can.h"
 
-#ifdef INCLUDE_WNCAN_DEVIO
+#if (defined INCLUDE_WNCAN_DEVIO) || (defined INCLUDE_PR6120_DEVIO)
 #include "CAN/wncanDevIO.h"
 #endif
 
 
 #ifndef PR6120_CAN_DEVIO_NAME
-#define PR6120_CAN_DEVIO_NAME	"can"
+#define PR6120_CAN_DEVIO_NAME	"/can"
 #endif
 
 #ifndef MAX_PR6120_CAN_BOARDS
@@ -45,11 +45,11 @@ extern void PR6120_CAN_InitAll();
 extern void PR6120_CAN_IntConnectAll();
 
 /* forward references */
-#ifdef INCLUDE_WNCAN_SHOW
+#if (defined INCLUDE_WNCAN_SHOW) || (defined INCLUDE_PR6120_SHOW)
 LOCAL void   pr6120_can_show(void);
 #endif
 
-#ifdef INCLUDE_WNCAN_DEVIO
+#if (defined INCLUDE_WNCAN_DEVIO) || (defined INCLUDE_PR6120_DEVIO)
 LOCAL void   pr6120_can_devio_init(void);
 #endif
 
@@ -76,7 +76,7 @@ void wncan_pr6120_can_init(void)
     PR6120_CAN_LLNode.nodedata.boarddata.establinks_fn = pr6120_can_establishLinks;
     PR6120_CAN_LLNode.nodedata.boarddata.close_fn      = pr6120_can_close;
     PR6120_CAN_LLNode.nodedata.boarddata.open_fn       = pr6120_can_open;
-#ifdef INCLUDE_WNCAN_SHOW
+#if (defined INCLUDE_WNCAN_SHOW) || (defined INCLUDE_PR6120_SHOW)
     PR6120_CAN_LLNode.nodedata.boarddata.show_fn       = pr6120_can_show;
 #else
     PR6120_CAN_LLNode.nodedata.boarddata.show_fn       = NULL;
@@ -106,7 +106,7 @@ void wncan_pr6120_can_init2(void)
     /* PR6120 CAN board including two sja1000 controllers (2) */
     PR6120_CAN_IntConnectAll();
     
-#ifdef INCLUDE_WNCAN_DEVIO
+#if (defined INCLUDE_WNCAN_DEVIO) || (defined INCLUDE_PR6120_DEVIO)
     /* Initialize the DevIO interface */
     pr6120_can_devio_init();
 #endif
@@ -176,8 +176,7 @@ void pr6120_can_link(void)
 }
 #endif
 
-
-#ifdef INCLUDE_WNCAN_SHOW
+#if (defined INCLUDE_WNCAN_SHOW) || (defined INCLUDE_PR6120_SHOW)
 /************************************************************************
 *
 * pr6120_can_show - display board to stdout
@@ -230,7 +229,7 @@ LOCAL void pr6120_can_show(void)
 #endif
 
 
-#ifdef INCLUDE_WNCAN_DEVIO
+#if (defined INCLUDE_WNCAN_DEVIO) || (defined INCLUDE_PR6120_DEVIO)
 /************************************************************************
 *
 * pr6120_can_devio_init - initialize the DevIO interface 
